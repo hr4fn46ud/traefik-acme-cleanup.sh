@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly ROOT_DIR
 readonly SCRIPT="$ROOT_DIR/traefik-acme-cleanup.sh"
 readonly FIXTURES="$ROOT_DIR/tests/fixtures"
 TEST_DIR="$(mktemp -d)"

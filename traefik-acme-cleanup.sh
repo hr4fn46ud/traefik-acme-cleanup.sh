@@ -109,7 +109,8 @@ if ! jq -e 'type == "array"' "$ROUTERS_FILE" >/dev/null 2>&1; then
     exit 1
 fi
 
-readonly ROUTER_COUNT="$(jq 'length' "$ROUTERS_FILE")"
+ROUTER_COUNT="$(jq 'length' "$ROUTERS_FILE")"
+readonly ROUTER_COUNT
 if (( ROUTER_COUNT == 0 )); then
     echo "ERROR: Traefik reports zero routers; cleanup aborted." >&2
     exit 1
@@ -127,7 +128,8 @@ jq -r '
     | tr '[:upper:]' '[:lower:]' \
     | sort -u > "$ACTIVE"
 
-readonly TRAEFIK_HOST_COUNT="$(wc -l < "$ACTIVE" | tr -d ' ')"
+TRAEFIK_HOST_COUNT="$(wc -l < "$ACTIVE" | tr -d ' ')"
+readonly TRAEFIK_HOST_COUNT
 if (( TRAEFIK_HOST_COUNT == 0 )); then
     echo "ERROR: No active Host() domains were detected; cleanup aborted." >&2
     exit 1
@@ -151,7 +153,8 @@ else
     echo "Continuing without manually preserved domains." >&2
 fi
 
-readonly ACTIVE_COUNT="$(wc -l < "$ACTIVE" | tr -d ' ')"
+ACTIVE_COUNT="$(wc -l < "$ACTIVE" | tr -d ' ')"
+readonly ACTIVE_COUNT
 
 # HostRegexp routers commonly belong to the separate DNS-01 resolver. They are
 # displayed for review, but their wildcard names cannot be inferred safely.
@@ -176,10 +179,13 @@ fi
 
 jq -R . < "$ACTIVE" | jq -s . > "$ACTIVE_JSON"
 
-readonly CERT_COUNT="$(jq '.letsencrypt.Certificates | length' "$ACME_FILE")"
+CERT_COUNT="$(jq '.letsencrypt.Certificates | length' "$ACME_FILE")"
+readonly CERT_COUNT
 
 # A certificate is orphaned only when none of its main/SAN names is active or
 # manually preserved. DNS names are compared case-insensitively.
+# The dollar-prefixed identifiers below belong to jq, not to the shell.
+# shellcheck disable=SC2016
 readonly ORPHAN_FILTER='
     ([.domain.main] + (.domain.sans // []) | map(ascii_downcase)) as $names
     | select(
@@ -188,11 +194,12 @@ readonly ORPHAN_FILTER='
       )
 '
 
-readonly ORPHAN_COUNT="$(
+ORPHAN_COUNT="$(
     jq --slurpfile active "$ACTIVE_JSON" \
         "[.letsencrypt.Certificates[] | $ORPHAN_FILTER] | length" \
         "$ACME_FILE"
 )"
+readonly ORPHAN_COUNT
 
 echo
 echo "Summary"
@@ -259,9 +266,12 @@ if (( EXPECTED_COUNT <= 0 )); then
     exit 1
 fi
 
-readonly ORIGINAL_OWNER="$(stat -c '%u:%g' "$ACME_FILE")"
-readonly ORIGINAL_MODE="$(stat -c '%a' "$ACME_FILE")"
-readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+ORIGINAL_OWNER="$(stat -c '%u:%g' "$ACME_FILE")"
+readonly ORIGINAL_OWNER
+ORIGINAL_MODE="$(stat -c '%a' "$ACME_FILE")"
+readonly ORIGINAL_MODE
+TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+readonly TIMESTAMP
 readonly BACKUP="${ACME_FILE}.bak-${TIMESTAMP}"
 
 echo
@@ -286,7 +296,8 @@ if ! jq empty "$NEW_ACME" 2>/dev/null; then
     exit 1
 fi
 
-readonly NEW_COUNT="$(jq '.letsencrypt.Certificates | length' "$NEW_ACME")"
+NEW_COUNT="$(jq '.letsencrypt.Certificates | length' "$NEW_ACME")"
+readonly NEW_COUNT
 if (( NEW_COUNT != EXPECTED_COUNT )); then
     printf 'ERROR: Certificate count validation failed. Expected %s, got %s.\n' \
         "$EXPECTED_COUNT" "$NEW_COUNT" >&2
@@ -337,7 +348,8 @@ if ! jq empty "$ACME_FILE" 2>/dev/null; then
     restore_and_restart "Final ACME store validation failed."
 fi
 
-readonly FINAL_COUNT="$(jq '.letsencrypt.Certificates | length' "$ACME_FILE")"
+FINAL_COUNT="$(jq '.letsencrypt.Certificates | length' "$ACME_FILE")"
+readonly FINAL_COUNT
 if (( FINAL_COUNT != EXPECTED_COUNT )); then
     restore_and_restart "The final certificate count is incorrect."
 fi
