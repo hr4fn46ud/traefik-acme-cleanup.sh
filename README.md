@@ -55,7 +55,8 @@ names from:
 /opt/pangolin/traefik-admin-preserve.txt
 ```
 
-It does **not** modify `acme-hetzner.json` or any other DNS-01 ACME store.
+It does **not** discover or modify additional ACME stores used by custom
+resolvers, including separate DNS-01 stores.
 
 ## Requirements
 
@@ -170,7 +171,7 @@ still served.
 - Uses a same-filesystem temporary file and atomic rename
 - Restores the backup and attempts to restart Traefik if installation,
   validation, or startup fails
-- Never writes to `acme-hetzner.json`
+- Never writes to additional custom-resolver ACME stores
 
 No script can determine business intent. The preserve file and the mandatory
 review step remain the administrator's responsibility.
@@ -199,17 +200,18 @@ sudo docker start traefik
 
 Do not restore while Traefik is writing the store.
 
-## Separate `acme-hetzner.json` / DNS-01 store
+## Separate custom-resolver / DNS-01 stores
 
-Pangolin deployments may use a separate resolver and
-`acme-hetzner.json` for Hetzner DNS-01 challenges, especially for wildcard
-certificates referenced by `HostRegexp()` routers. Concrete wildcard names
-cannot be derived safely from a regular expression.
+Pangolin deployments may use one or more custom resolvers with separate ACME
+stores for DNS-01 challenges, especially for wildcard certificates referenced
+by `HostRegexp()` routers. Store names and DNS providers vary by deployment.
+Concrete wildcard names cannot be derived safely from a regular expression.
 
 For that reason, this script only displays `HostRegexp` router name, rule, and
-certificate resolver. It never reads, rewrites, or cleans the Hetzner store.
-Do not point `ACME_FILE` at that store and assume the same discovery logic is
-sufficient; DNS-01 cleanup needs resolver-aware rules and a separate review.
+certificate resolver. It never discovers, rewrites, or cleans any additional
+custom-resolver store. Do not point `ACME_FILE` at such a store and assume the
+same discovery logic is sufficient; DNS-01 cleanup needs resolver-aware rules
+and a separate review.
 
 ## Non-standard paths and names
 
@@ -266,7 +268,7 @@ of its names remains protected.
 
 The script attempts automatic rollback. If Traefik still does not run, inspect
 `docker logs traefik`, restore the printed backup manually, and start the
-container. The separate DNS-01 store remains untouched.
+container. Separate custom-resolver stores remain untouched.
 
 ### `stat: invalid option -- c`
 

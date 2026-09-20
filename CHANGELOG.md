@@ -10,5 +10,5 @@ All notable changes to this project are documented here.
 - Explicit `--delete` mode with backup, validation, atomic replacement, and rollback.
 - Active-domain discovery through Traefik's internal API.
 - Manual protection through `traefik-admin-preserve.txt`.
-- Reporting for `HostRegexp` routers and protection of the separate `acme-hetzner.json` DNS-01 store.
+- Reporting for `HostRegexp` routers without modifying separate custom-resolver ACME stores.
 - Pangolin-focused installation, recovery, and troubleshooting documentation.

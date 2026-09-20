@@ -170,8 +170,8 @@ if [[ -n "$REGEXP_ROUTERS" ]]; then
     echo "---------------------------"
     echo "$REGEXP_ROUTERS"
     echo
-    echo "NOTE: Wildcard certificates are normally stored in the separate"
-    echo "Hetzner/DNS-01 ACME store. acme-hetzner.json will not be modified."
+    echo "NOTE: Wildcard certificates are often stored by a separate custom"
+    echo "DNS-01 resolver. Additional ACME stores will not be modified."
 fi
 
 jq -R . < "$ACTIVE" | jq -s . > "$ACTIVE_JSON"
@@ -361,4 +361,4 @@ printf "Remaining:  %s certificates\n" "$FINAL_COUNT"
 printf "\nBackup:\n  %s\n" "$BACKUP"
 printf "\nPreserve file:\n  %s\n" "$PRESERVE_FILE"
 echo
-echo "acme-hetzner.json was not modified."
+echo "No additional custom-resolver ACME store was modified."

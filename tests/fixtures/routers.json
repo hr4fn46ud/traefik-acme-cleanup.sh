@@ -7,6 +7,6 @@
   {
     "name": "garage@file",
     "rule": "HostRegexp(`^.+\\.storage\\.example\\.com$`)",
-    "tls": {"certResolver": "hetzner"}
+    "tls": {"certResolver": "custom-dns"}
   }
 ]
