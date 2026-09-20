@@ -1,0 +1,30 @@
+{
+  "letsencrypt": {
+    "Account": {"Email": "admin@example.com"},
+    "Certificates": [
+      {
+        "domain": {"main": "active.example.com"},
+        "certificate": "ACTIVE",
+        "key": "KEY"
+      },
+      {
+        "domain": {"main": "preserved.example.com"},
+        "certificate": "PRESERVED",
+        "key": "KEY"
+      },
+      {
+        "domain": {
+          "main": "old-main.example.com",
+          "sans": ["shared.example.com", "old-san.example.com"]
+        },
+        "certificate": "SHARED",
+        "key": "KEY"
+      },
+      {
+        "domain": {"main": "stale.example.com"},
+        "certificate": "STALE",
+        "key": "KEY"
+      }
+    ]
+  }
+}

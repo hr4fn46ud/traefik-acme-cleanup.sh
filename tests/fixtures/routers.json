@@ -1,0 +1,12 @@
+[
+  {
+    "name": "active@docker",
+    "rule": "Host(`active.example.com`,`shared.example.com`)",
+    "tls": {"certResolver": "letsencrypt"}
+  },
+  {
+    "name": "garage@file",
+    "rule": "HostRegexp(`^.+\\.storage\\.example\\.com$`)",
+    "tls": {"certResolver": "hetzner"}
+  }
+]

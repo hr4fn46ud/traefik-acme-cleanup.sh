@@ -1,0 +1,7 @@
+# Keep certificates for these names even when no current Traefik Host() router
+# references them. Enter one exact DNS name per line. Blank lines and lines
+# beginning with # are ignored.
+#
+# Examples:
+# admin.example.com
+# *.storage.example.com

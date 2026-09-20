@@ -1,0 +1,20 @@
+name: Shell checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+      - name: Run ShellCheck
+        run: shellcheck traefik-acme-cleanup.sh tests/test.sh
+      - name: Run regression tests
+        run: bash tests/test.sh
