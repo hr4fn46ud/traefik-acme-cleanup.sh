@@ -94,20 +94,20 @@ run_case() {
 
 # ---------------------------------------------------------------- help/version
 
-"$SCRIPT" --help > "$TEST_DIR/help.txt" 2>&1 \
+bash "$SCRIPT" --help > "$TEST_DIR/help.txt" 2>&1 \
     || fail "--help exited non-zero"
 assert_contains "$TEST_DIR/help.txt" "Usage:"
 assert_contains "$TEST_DIR/help.txt" "--dry-run"
 assert_contains "$TEST_DIR/help.txt" "TRAEFIK_API_URL"
 
-assert_contains <("$SCRIPT" --version) "1.1.0"
+assert_contains <(bash "$SCRIPT" --version) "1.1.0"
 
 # ------------------------------------------------------------ argument parsing
 
-expect_failure "unknown argument" "$SCRIPT" --bogus
+expect_failure "unknown argument" bash "$SCRIPT" --bogus
 assert_contains "$TEST_DIR/last-failure.txt" "Unknown argument: --bogus"
 
-expect_failure "--force without --delete" "$SCRIPT" --force
+expect_failure "--force without --delete" bash "$SCRIPT" --force
 assert_contains "$TEST_DIR/last-failure.txt" "--force is only accepted together with --delete"
 
 # ------------------------------------------------------------------ invalid store
@@ -118,7 +118,7 @@ expect_failure "invalid ACME store" \
     env ACME_FILE="$case_dir/acme.json" \
         PRESERVE_FILE="$case_dir/preserve.txt" \
         TRAEFIK_CONTAINER="traefik" \
-        "$SCRIPT" --dry-run
+        bash "$SCRIPT" --dry-run
 assert_contains "$TEST_DIR/last-failure.txt" "not valid JSON"
 
 # --------------------------------------------------------------------- dry run
@@ -129,7 +129,7 @@ case_dir="$(run_case dry-run)"
 ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
-    "$SCRIPT" > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" > "$case_dir/output.txt" 2>&1
 
 assert_contains "$case_dir/output.txt" "Orphaned certificates:      1"
 assert_contains "$case_dir/output.txt" "stale.example.com"
@@ -150,7 +150,7 @@ case_dir="$(run_case dry-run-flag)"
 ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
-    "$SCRIPT" --dry-run > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" --dry-run > "$case_dir/output.txt" 2>&1
 assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
 
 # ------------------------------------------------------- TRAEFIK_API_URL override
@@ -162,7 +162,7 @@ ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
 TRAEFIK_API_URL="http://127.0.0.1:9999" \
-    "$SCRIPT" > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" > "$case_dir/output.txt" 2>&1
 assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
 assert_contains "$DOCKER_LOG" "http://127.0.0.1:9999/api/http/routers"
 if grep -Fq "127.0.0.1:8080" "$DOCKER_LOG"; then
@@ -178,7 +178,7 @@ ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
 PROTECT_WILDCARDS=0 \
-    "$SCRIPT" > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" > "$case_dir/output.txt" 2>&1
 assert_contains "$case_dir/output.txt" "Orphaned certificates:      2"
 assert_contains "$case_dir/output.txt" "*.wildcard.example.com"
 assert_contains "$case_dir/output.txt" "Wildcard protection:        off (1)"
@@ -192,7 +192,7 @@ case_dir="$(run_case delete)"
 ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
-    "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
 
 assert_contains "$case_dir/output.txt" "Cleanup complete"
 [[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "4" ]] \
@@ -231,7 +231,7 @@ ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
 KEEP_BACKUPS=2 \
-    "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
+    bash "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
 assert_contains "$case_dir/output.txt" "Cleanup complete"
 assert_contains "$case_dir/output.txt" "Pruning old backups (keeping 2)"
 [[ "$(count_backups "$case_dir")" == "2" ]] \
@@ -256,7 +256,7 @@ ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/missing-preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
 PROTECT_WILDCARDS=0 \
-    "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1 && \
+    bash "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1 && \
     fail "All-certificates safety check unexpectedly succeeded"
 
 assert_contains "$case_dir/output.txt" "Cleanup would remove all certificates"
@@ -278,7 +278,7 @@ ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/missing-preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
 PROTECT_WILDCARDS=0 \
-    "$SCRIPT" --delete --force > "$case_dir/output.txt" 2>&1 \
+    bash "$SCRIPT" --delete --force > "$case_dir/output.txt" 2>&1 \
     || fail "--delete --force failed unexpectedly"
 assert_contains "$case_dir/output.txt" "Cleanup complete"
 [[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "0" ]] \
