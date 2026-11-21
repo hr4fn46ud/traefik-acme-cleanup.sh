@@ -20,6 +20,18 @@ assert_contains() {
         || fail "Expected '$expected' in $file"
 }
 
+expect_failure() {
+    local description="$1"
+    shift
+    if "$@" > "$TEST_DIR/last-failure.txt" 2>&1; then
+        fail "Expected a non-zero exit code: $description"
+    fi
+}
+
+count_backups() {
+    find "$1" -maxdepth 1 -name 'acme.json.bak-*' | wc -l | tr -d ' '
+}
+
 mkdir -p "$TEST_DIR/bin"
 
 cat > "$TEST_DIR/bin/docker" <<'EOF'
@@ -80,6 +92,39 @@ run_case() {
     printf '%s\n' "$case_dir"
 }
 
+# ---------------------------------------------------------------- help/version
+
+"$SCRIPT" --help > "$TEST_DIR/help.txt" 2>&1 \
+    || fail "--help exited non-zero"
+assert_contains "$TEST_DIR/help.txt" "Usage:"
+assert_contains "$TEST_DIR/help.txt" "--dry-run"
+assert_contains "$TEST_DIR/help.txt" "TRAEFIK_API_URL"
+
+assert_contains <("$SCRIPT" --version) "1.1.0"
+
+# ------------------------------------------------------------ argument parsing
+
+expect_failure "unknown argument" "$SCRIPT" --bogus
+assert_contains "$TEST_DIR/last-failure.txt" "Unknown argument: --bogus"
+
+expect_failure "--force without --delete" "$SCRIPT" --force
+assert_contains "$TEST_DIR/last-failure.txt" "--force is only accepted together with --delete"
+
+# ------------------------------------------------------------------ invalid store
+
+case_dir="$(run_case invalid-json)"
+printf 'not-json\n' > "$case_dir/acme.json"
+expect_failure "invalid ACME store" \
+    env ACME_FILE="$case_dir/acme.json" \
+        PRESERVE_FILE="$case_dir/preserve.txt" \
+        TRAEFIK_CONTAINER="traefik" \
+        "$SCRIPT" --dry-run
+assert_contains "$TEST_DIR/last-failure.txt" "not valid JSON"
+
+# --------------------------------------------------------------------- dry run
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
 case_dir="$(run_case dry-run)"
 ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/preserve.txt" \
@@ -89,11 +134,57 @@ TRAEFIK_CONTAINER="traefik" \
 assert_contains "$case_dir/output.txt" "Orphaned certificates:      1"
 assert_contains "$case_dir/output.txt" "stale.example.com"
 assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
-[[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "4" ]] \
+assert_contains "$case_dir/output.txt" "Wildcard protection:        on (1)"
+assert_contains "$case_dir/output.txt" "*.wildcard.example.com"
+[[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "5" ]] \
     || fail "Dry run changed the ACME store"
 if grep -q '^stop ' "$DOCKER_LOG"; then
     fail "Dry run stopped Traefik"
 fi
+
+# ------------------------------------------------ explicit --dry-run flag is equal
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
+case_dir="$(run_case dry-run-flag)"
+ACME_FILE="$case_dir/acme.json" \
+PRESERVE_FILE="$case_dir/preserve.txt" \
+TRAEFIK_CONTAINER="traefik" \
+    "$SCRIPT" --dry-run > "$case_dir/output.txt" 2>&1
+assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
+
+# ------------------------------------------------------- TRAEFIK_API_URL override
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
+case_dir="$(run_case api-url)"
+ACME_FILE="$case_dir/acme.json" \
+PRESERVE_FILE="$case_dir/preserve.txt" \
+TRAEFIK_CONTAINER="traefik" \
+TRAEFIK_API_URL="http://127.0.0.1:9999" \
+    "$SCRIPT" > "$case_dir/output.txt" 2>&1
+assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
+assert_contains "$DOCKER_LOG" "http://127.0.0.1:9999/api/http/routers"
+if grep -Fq "127.0.0.1:8080" "$DOCKER_LOG"; then
+    fail "Default API URL was used despite TRAEFIK_API_URL override"
+fi
+
+# ------------------------------------------------- wildcard protection disabled
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
+case_dir="$(run_case wildcards-off)"
+ACME_FILE="$case_dir/acme.json" \
+PRESERVE_FILE="$case_dir/preserve.txt" \
+TRAEFIK_CONTAINER="traefik" \
+PROTECT_WILDCARDS=0 \
+    "$SCRIPT" > "$case_dir/output.txt" 2>&1
+assert_contains "$case_dir/output.txt" "Orphaned certificates:      2"
+assert_contains "$case_dir/output.txt" "*.wildcard.example.com"
+assert_contains "$case_dir/output.txt" "Wildcard protection:        off (1)"
+assert_contains "$case_dir/output.txt" "DRY RUN ONLY"
+
+# ----------------------------------------------------------------- delete mode
 
 : > "$DOCKER_LOG"
 printf 'true\n' > "$DOCKER_STATE"
@@ -104,17 +195,55 @@ TRAEFIK_CONTAINER="traefik" \
     "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
 
 assert_contains "$case_dir/output.txt" "Cleanup complete"
-[[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "3" ]] \
+[[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "4" ]] \
     || fail "Delete mode produced the wrong certificate count"
 if jq -e '.letsencrypt.Certificates[] | select(.domain.main == "stale.example.com")' \
     "$case_dir/acme.json" >/dev/null; then
     fail "Stale certificate was not removed"
 fi
-[[ "$(find "$case_dir" -name 'acme.json.bak-*' | wc -l | tr -d ' ')" == "1" ]] \
+if jq -e '.letsencrypt.Certificates[] | select(.domain.main == "active.example.com")' \
+    "$case_dir/acme.json" >/dev/null; then :; else
+    fail "Active certificate was removed"
+fi
+if jq -e '.letsencrypt.Certificates[] | select(.domain.main == "preserved.example.com")' \
+    "$case_dir/acme.json" >/dev/null; then :; else
+    fail "Preserved certificate was removed"
+fi
+if jq -e '.letsencrypt.Certificates[] | select(.domain.main == "*.wildcard.example.com")' \
+    "$case_dir/acme.json" >/dev/null; then :; else
+    fail "Wildcard certificate was removed despite protection"
+fi
+[[ "$(count_backups "$case_dir")" == "1" ]] \
     || fail "Delete mode did not create exactly one backup"
 assert_contains "$DOCKER_LOG" "stop traefik"
 assert_contains "$DOCKER_LOG" "start traefik"
 [[ "$(cat "$DOCKER_STATE")" == "true" ]] || fail "Traefik was not restarted"
+
+# ------------------------------------------------------------- backup retention
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
+case_dir="$(run_case retention)"
+touch -d '2026-01-01 00:00:00' "$case_dir/acme.json.bak-20260101-000000"
+touch -d '2026-01-02 00:00:00' "$case_dir/acme.json.bak-20260102-000000"
+touch -d '2026-01-03 00:00:00' "$case_dir/acme.json.bak-20260103-000000"
+ACME_FILE="$case_dir/acme.json" \
+PRESERVE_FILE="$case_dir/preserve.txt" \
+TRAEFIK_CONTAINER="traefik" \
+KEEP_BACKUPS=2 \
+    "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1
+assert_contains "$case_dir/output.txt" "Cleanup complete"
+assert_contains "$case_dir/output.txt" "Pruning old backups (keeping 2)"
+[[ "$(count_backups "$case_dir")" == "2" ]] \
+    || fail "Backup retention did not keep exactly two backups"
+[[ -f "$case_dir/acme.json.bak-20260103-000000" ]] \
+    || fail "Backup retention pruned the wrong files"
+[[ ! -f "$case_dir/acme.json.bak-20260101-000000" ]] \
+    || fail "Oldest backup was retained"
+[[ ! -f "$case_dir/acme.json.bak-20260102-000000" ]] \
+    || fail "Second-oldest backup was retained"
+
+# --------------------------------------------------------- remove-all safeguard
 
 : > "$DOCKER_LOG"
 printf 'true\n' > "$DOCKER_STATE"
@@ -126,14 +255,35 @@ ROUTERS_FIXTURE="$case_dir/routers.json" \
 ACME_FILE="$case_dir/acme.json" \
 PRESERVE_FILE="$case_dir/missing-preserve.txt" \
 TRAEFIK_CONTAINER="traefik" \
+PROTECT_WILDCARDS=0 \
     "$SCRIPT" --delete > "$case_dir/output.txt" 2>&1 && \
     fail "All-certificates safety check unexpectedly succeeded"
 
 assert_contains "$case_dir/output.txt" "Cleanup would remove all certificates"
+assert_contains "$case_dir/output.txt" "--delete --force"
 if grep -q '^stop ' "$DOCKER_LOG"; then
     fail "Safety abort happened after Traefik was stopped"
 fi
 
-assert_contains <("$SCRIPT" --version) "1.0.0"
+# --------------------------------------------------- --force overrides safeguard
+
+: > "$DOCKER_LOG"
+printf 'true\n' > "$DOCKER_STATE"
+case_dir="$(run_case force)"
+cat > "$case_dir/routers.json" <<'EOF'
+[{"name":"unknown@docker","rule":"Host(`unknown.example.com`)","tls":{"certResolver":"letsencrypt"}}]
+EOF
+ROUTERS_FIXTURE="$case_dir/routers.json" \
+ACME_FILE="$case_dir/acme.json" \
+PRESERVE_FILE="$case_dir/missing-preserve.txt" \
+TRAEFIK_CONTAINER="traefik" \
+PROTECT_WILDCARDS=0 \
+    "$SCRIPT" --delete --force > "$case_dir/output.txt" 2>&1 \
+    || fail "--delete --force failed unexpectedly"
+assert_contains "$case_dir/output.txt" "Cleanup complete"
+[[ "$(jq '.letsencrypt.Certificates | length' "$case_dir/acme.json")" == "0" ]] \
+    || fail "--delete --force left certificates behind"
+assert_contains "$DOCKER_LOG" "start traefik"
+[[ "$(cat "$DOCKER_STATE")" == "true" ]] || fail "Traefik was not restarted"
 
 echo "PASS: all tests"

@@ -24,6 +24,11 @@
         "domain": {"main": "stale.example.com"},
         "certificate": "STALE",
         "key": "KEY"
+      },
+      {
+        "domain": {"main": "*.wildcard.example.com"},
+        "certificate": "WILDCARD",
+        "key": "KEY"
       }
     ]
   }
